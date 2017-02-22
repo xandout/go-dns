@@ -6,10 +6,6 @@ import (
 	"os"
 )
 
-//import (
-//	"encoding/binary"
-//)
-
 func CheckErr(err error) {
 	if err != nil {
 		fmt.Println("Error: ", err)
@@ -23,7 +19,7 @@ type dnsHeader struct {
 	Bits                               uint16
 	Qdcount, Ancount, Nscount, Arcount uint16
 }
-
+// Masks to extract info from bits
 const (
 	// dnsHeader.Bits
 	_QR = 1 << 15 // query/response (response=1)
@@ -47,15 +43,21 @@ func main() {
 
 	for {
 		n, addr, err := ServerCon.ReadFromUDP(buffer)
+
+		fmt.Println("\n\n")
+
+		header_bytes := buffer[0:12]
+		payload_bytes := buffer[13:n]
+
 		header := dnsHeader{
-			Id:      uint16(buffer[0])<<8 | uint16(buffer[1]),
-			Bits:    uint16(buffer[2])<<8 | uint16(buffer[3]),
-			Qdcount: uint16(buffer[4])<<8 | uint16(buffer[5]),
-			Ancount: uint16(buffer[6])<<8 | uint16(buffer[7]),
-			Nscount: uint16(buffer[8])<<8 | uint16(buffer[9]),
-			Arcount: uint16(buffer[10])<<8 | uint16(buffer[11]),
+			Id:      uint16(header_bytes[0])<<8 | uint16(header_bytes[1]),
+			Bits:    uint16(header_bytes[2])<<8 | uint16(header_bytes[3]),
+			Qdcount: uint16(header_bytes[4])<<8 | uint16(header_bytes[5]),
+			Ancount: uint16(header_bytes[6])<<8 | uint16(header_bytes[7]),
+			Nscount: uint16(header_bytes[8])<<8 | uint16(header_bytes[9]),
+			Arcount: uint16(header_bytes[10])<<8 | uint16(header_bytes[11]),
 		}
-		fmt.Println("Received ", string(buffer[0:n]), " from ", addr)
+
 		fmt.Println("Packet size: ", n)
 		fmt.Println("Is Q: ", header.Bits & _QR)
 		fmt.Println("Is AA: ", header.Bits & _AA)
@@ -63,7 +65,19 @@ func main() {
 		fmt.Println("Is RD: ", header.Bits & _RD)
 		fmt.Println("Is RA: ", header.Bits & _RA)
 
+		final_str_asc := ""
+		final_str_hex := ""
+		for i := 0; i < len(payload_bytes)-4; i++ {
+			if payload_bytes[i] < 31 && payload_bytes[i] != 0 {
+				payload_bytes[i] = 46
+			}
+			final_str_asc += fmt.Sprintf("  %s", string(payload_bytes[i]))
+			final_str_hex += fmt.Sprintf("% x", payload_bytes[i])
+		}
 
+
+		fmt.Println(final_str_asc)
+		fmt.Println(final_str_hex)
 
 
 
