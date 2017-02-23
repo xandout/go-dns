@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"encoding/binary"
+	"bytes"
 )
 
 func CheckErr(err error) {
@@ -25,6 +27,22 @@ type dnsQuestion struct {
 	Name   string
 	Qtype  uint16
 	Qclass uint16
+}
+
+// DNS responses (resource records).
+// There are many types of messages,
+// but they all share the same header.
+type dnsRR_Header struct {
+	Name     string
+	Rrtype   uint16
+	Class    uint16
+	Ttl      uint32
+	Rdlength uint16 // length of data after header
+}
+
+type dnsRR_A struct {
+	Hdr dnsRR_Header
+	A   uint32
 }
 
 // Wire constants.
@@ -81,8 +99,35 @@ const (
 	_RA = 1 << 7  // recursion available
 )
 
+
+var getQType = map[uint16]func() string {
+	dnsTypeA: func() string { return "A"},
+	dnsTypeNS: func() string { return "NS"},
+	dnsTypeMD: func() string { return "MD"},
+	dnsTypeMF: func() string { return "MF"},
+	dnsTypeCNAME: func() string { return "CNAME"},
+	dnsTypeSOA: func() string { return "SOA"},
+	dnsTypeMB: func() string { return "MB"},
+	dnsTypeMG: func() string { return "MG"},
+	dnsTypeMR: func() string { return "MR"},
+	dnsTypeNULL: func() string { return "NULL"},
+	dnsTypeWKS: func() string { return "WKS"},
+	dnsTypePTR: func() string { return "PTR"},
+	dnsTypeHINFO: func() string { return "HINFO"},
+	dnsTypeMINFO: func() string { return "MINFO"},
+	dnsTypeMX: func() string { return "MX"},
+	dnsTypeTXT: func() string { return "TXT"},
+	dnsTypeAAAA: func() string { return "AAAA"},
+	dnsTypeSRV: func() string { return "SRV"},
+	dnsTypeAXFR: func() string { return "AXFR"},
+	dnsTypeMAILB: func() string { return "MAILB"},
+	dnsTypeMAILA: func() string { return "MAILA"},
+	dnsTypeALL: func() string { return "ALL"},
+}
+
+
+
 func main() {
-	fmt.Println("Hello")
 	ServerAddr, err := net.ResolveUDPAddr("udp", "0.0.0.0:53")
 	CheckErr(err)
 
@@ -137,12 +182,32 @@ func main() {
 		fmt.Println(final_str_asc)
 		fmt.Println(final_str_hex)
 		fmt.Println(" QUERY: ", query.Name)
-		fmt.Println(" QTYPE: ", query.Qtype)
+		fmt.Println(" QTYPE: ", getQType[query.Qtype]())
 		fmt.Println(" QCLASS: ", query.Qclass)
 
 		CheckErr(err)
 
-		_, err = ServerCon.WriteToUDP(make([]byte, 3), addr)
+		rrh := dnsRR_Header{
+			Name: query.Name,
+			Rrtype: query.Qtype,
+			Class: query.Qclass,
+			Ttl: uint32(3600),
+			Rdlength: 4,
+		}
+
+		full_rr := dnsRR_A{
+			Hdr: rrh,
+			A: binary.BigEndian.Uint32(net.ParseIP("192.168.0.1")),
+		}
+
+		newbuf := new(bytes.Buffer)
+		binary.Write(newbuf, binary.BigEndian, full_rr)
+		newbytes := newbuf.Bytes()
+
+		fmt.Println(newbytes)
+
+
+		_, err = ServerCon.WriteToUDP(newbytes, addr)
 
 	}
 
